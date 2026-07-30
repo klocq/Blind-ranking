@@ -1,0 +1,6 @@
+{
+  "name": "Blind Ranking Challenge",
+  "description": "Challenge your movie intuition! Rank 10 movies blindly, build your official top 10, calculate your comparison score, and compete on the global leaderboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
