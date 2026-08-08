@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { GoogleGenAI } from '@google/genai';
 import { CURATED_TMDB_MOVIES } from './src/data/mockMovies.js';
+import { CURATED_IGDB_GAMES } from './src/data/mockGames.js';
 import { LeaderboardEntry, Movie } from './src/types.js';
 
 export const app = express();
@@ -192,6 +193,95 @@ app.get('/api/movies', async (req, res) => {
     res.json({ success: true, movies: selected, source: 'curated-tmdb' });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to fetch movies' });
+  }
+});
+
+// 1.5. Dynamic IGDB Games API Endpoint
+app.get('/api/games', async (req, res) => {
+  try {
+    const count = Number(req.query.count) || 10;
+    const clientId = (req.query.clientId as string) || process.env.TWITCH_CLIENT_ID || process.env.IGDB_CLIENT_ID;
+    const clientSecret = (req.query.clientSecret as string) || process.env.TWITCH_CLIENT_SECRET || process.env.IGDB_CLIENT_SECRET;
+
+    if (clientId && clientSecret && clientId.trim().length > 3 && clientSecret.trim().length > 3) {
+      try {
+        // Step A: Fetch Twitch OAuth App Access Token
+        const tokenRes = await fetch(
+          `https://id.twitch.tv/oauth2/token?client_id=${clientId.trim()}&client_secret=${clientSecret.trim()}&grant_type=client_credentials`,
+          { method: 'POST' }
+        );
+
+        if (tokenRes.ok) {
+          const tokenData = await tokenRes.json();
+          const accessToken = tokenData.access_token;
+
+          // Step B: Query IGDB v4 API for well known video games (rating >= 75, rating count >= 10)
+          let igdbRes = await fetch('https://api.igdb.com/v4/games', {
+            method: 'POST',
+            headers: {
+              'Client-ID': clientId.trim(),
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'text/plain'
+            },
+            body: `fields name, summary, rating, rating_count, total_rating_count, first_release_date, cover.url, genres.name; where rating >= 75 & rating_count >= 10 & cover != null; sort rating desc; limit 100;`
+          });
+
+          let gamesData = igdbRes.ok ? await igdbRes.json() : [];
+
+          // If strict query returned fewer items, fallback to rating >= 75 with cover
+          if (!Array.isArray(gamesData) || gamesData.length < count) {
+            const fallbackRes = await fetch('https://api.igdb.com/v4/games', {
+              method: 'POST',
+              headers: {
+                'Client-ID': clientId.trim(),
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'text/plain'
+              },
+              body: `fields name, summary, rating, first_release_date, cover.url, genres.name; where rating >= 75 & cover != null; sort rating desc; limit 100;`
+            });
+            if (fallbackRes.ok) {
+              gamesData = await fallbackRes.json();
+            }
+          }
+
+          if (Array.isArray(gamesData) && gamesData.length >= count) {
+            const shuffled = shuffleArray(gamesData).slice(0, count);
+            const mappedGames: Movie[] = shuffled.map((g: any) => {
+              let posterUrl = 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=500&q=80';
+              if (g.cover && g.cover.url) {
+                let rawUrl = g.cover.url;
+                if (rawUrl.startsWith('//')) rawUrl = 'https:' + rawUrl;
+                posterUrl = rawUrl.replace('t_thumb', 't_cover_big');
+              }
+              const releaseYear = g.first_release_date
+                ? new Date(g.first_release_date * 1000).getFullYear()
+                : 2022;
+
+              return {
+                id: g.id,
+                title: g.name,
+                originalTitle: g.name,
+                releaseYear,
+                posterPath: posterUrl,
+                overview: g.summary || 'A legendary title in the video game database.',
+                voteAverage: g.rating ? Number((g.rating / 10).toFixed(1)) : 9.0,
+                genres: g.genres ? g.genres.map((gn: any) => gn.name) : ['Video Game']
+              };
+            });
+
+            return res.json({ success: true, games: mappedGames, source: 'igdb-api' });
+          }
+        }
+      } catch (igdbErr) {
+        console.warn('IGDB API fetch failed, using curated video games dataset:', igdbErr);
+      }
+    }
+
+    // Fallback to rich curated video games dataset
+    const selected = shuffleArray(CURATED_IGDB_GAMES).slice(0, count);
+    res.json({ success: true, games: selected, source: 'curated-igdb' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to fetch games' });
   }
 });
 

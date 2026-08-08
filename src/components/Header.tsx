@@ -73,9 +73,6 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Gamepad2 className="w-3.5 h-3.5" />
             <span>Games</span>
-            <span className="text-[9px] px-1 bg-zinc-800 text-purple-300 rounded font-medium border border-purple-500/30">
-              Soon
-            </span>
           </button>
 
           <button

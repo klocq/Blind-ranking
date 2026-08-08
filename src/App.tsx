@@ -32,6 +32,8 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isDevGuideOpen, setIsDevGuideOpen] = useState<boolean>(false);
   const [tmdbApiKey, setTmdbApiKey] = useState<string>('');
+  const [igdbClientId, setIgdbClientId] = useState<string>('b5nv3312oi5aqv3nhmvbzjvfm7eqee');
+  const [igdbClientSecret, setIgdbClientSecret] = useState<string>('3r549ce0668vcp37ywyd9xq230e3p3');
 
   const generateRandomNickname = () => {
     const random = RANDOM_NICKNAMES[Math.floor(Math.random() * RANDOM_NICKNAMES.length)];
@@ -42,17 +44,27 @@ export default function App() {
   const handleStartGame = async () => {
     try {
       setLoadingMovies(true);
-      const url = tmdbApiKey
-        ? `/api/movies?count=10&apiKey=${encodeURIComponent(tmdbApiKey)}`
-        : '/api/movies?count=10';
+      
+      let url = '/api/movies?count=10';
+      if (activeCategory === 'movies') {
+        url = tmdbApiKey
+          ? `/api/movies?count=10&apiKey=${encodeURIComponent(tmdbApiKey)}`
+          : '/api/movies?count=10';
+      } else if (activeCategory === 'games') {
+        url = igdbClientId && igdbClientSecret
+          ? `/api/games?count=10&clientId=${encodeURIComponent(igdbClientId)}&clientSecret=${encodeURIComponent(igdbClientSecret)}`
+          : '/api/games?count=10';
+      }
 
       const res = await fetch(url);
       const data = await res.json();
 
-      if (data.success && Array.isArray(data.movies) && data.movies.length > 0) {
-        setMovies(data.movies);
+      const items = data.movies || data.games || [];
+
+      if (data.success && Array.isArray(items) && items.length > 0) {
+        setMovies(items);
       } else {
-        console.warn('API response missing movies, using fallback');
+        console.warn('API response missing items, using fallback');
       }
 
       setBlindPlacements([]);
@@ -117,9 +129,7 @@ export default function App() {
         activeCategory={activeCategory}
         onSelectCategory={(cat) => {
           setActiveCategory(cat);
-          if (cat !== 'movies') {
-            setGamePhase('welcome');
-          }
+          setGamePhase('welcome');
         }}
         currentPhase={gamePhase}
         onNavigateLeaderboard={() => setGamePhase('leaderboard')}
@@ -130,7 +140,7 @@ export default function App() {
 
       {/* MAIN CONTENT AREA */}
       <main className="flex-1">
-        {activeCategory !== 'movies' ? (
+        {activeCategory === 'music' ? (
           <ComingSoonCategory
             category={activeCategory}
             onSwitchToMovies={() => {
@@ -146,18 +156,22 @@ export default function App() {
                 {/* Hero Badge */}
                 <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-300 text-xs font-bold mb-6 shadow-inner">
                   <Sparkles className="w-4 h-4 text-amber-400" />
-                  <span>Interactive Intuition Challenge • Powered by TMDB API</span>
+                  <span>
+                    Interactive Intuition Challenge • {activeCategory === 'games' ? 'Powered by IGDB API' : 'Powered by TMDB API'}
+                  </span>
                 </div>
 
                 {/* Hero Headline */}
                 <h1 className="text-4xl sm:text-6xl font-black tracking-tight text-white mb-4 leading-tight">
-                  Rank <span className="bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-indigo-200 to-amber-300">10 Movies</span> Blindly.
+                  Rank <span className="bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-indigo-200 to-amber-300">
+                    10 {activeCategory === 'games' ? 'Video Games' : 'Movies'}
+                  </span> Blindly.
                   <br />
                   Compare Your True Instincts.
                 </h1>
 
                 <p className="text-sm sm:text-base text-zinc-400 max-w-2xl mx-auto leading-relaxed mb-8">
-                  Test your cinematic judgement! In <strong>Phase 1</strong>, assign 10 random movies to positions #1 to #10 as they appear one-by-one. In <strong>Phase 2</strong>, organize your official non-blind list to discover your accuracy score.
+                  Test your {activeCategory === 'games' ? 'gaming' : 'cinematic'} judgement! In <strong>Phase 1</strong>, assign 10 random {activeCategory === 'games' ? 'video games' : 'movies'} to positions #1 to #10 as they appear one-by-one. In <strong>Phase 2</strong>, organize your official non-blind list to discover your accuracy score.
                 </p>
 
                 {/* Nickname Input & Start Card */}
@@ -194,12 +208,12 @@ export default function App() {
                     {loadingMovies ? (
                       <>
                         <Sparkles className="w-5 h-5 animate-spin text-amber-300" />
-                        <span>Fetching TMDB Movies...</span>
+                        <span>Fetching {activeCategory === 'games' ? 'Video Games' : 'Movies'}...</span>
                       </>
                     ) : (
                       <>
                         <Play className="w-5 h-5 fill-white" />
-                        <span>Start Challenge</span>
+                        <span>Start {activeCategory === 'games' ? 'Games' : 'Movie'} Challenge</span>
                       </>
                     )}
                   </button>
@@ -314,6 +328,12 @@ export default function App() {
         onClose={() => setIsSettingsOpen(false)}
         apiKey={tmdbApiKey}
         onSaveApiKey={(key) => setTmdbApiKey(key)}
+        igdbClientId={igdbClientId}
+        igdbClientSecret={igdbClientSecret}
+        onSaveIgdbConfig={(cid, sec) => {
+          setIgdbClientId(cid);
+          setIgdbClientSecret(sec);
+        }}
       />
 
       <DeveloperGuideModal
